@@ -17,6 +17,7 @@ logging.RegisterConsoleLogger();
 const defaultConfig = {
 	UseFrontend: false,
 	UseMatchmaker: false,
+	UseSFU: false,
 	UseHTTPS: false,
 	HTTPSCertFile: './certificates/client-cert.pem',
 	HTTPSKeyFile: './certificates/client-key.pem',
@@ -765,79 +766,84 @@ function onSFUDisconnected(sfuPlayer) {
 	players.delete(sfuPlayer.id);
 	streamers.delete(sfuPlayer.id);
 }
+/**
+ * 是否启用SFU功能
+ */
+if (config.UseSFU) {
+	sfuMessageHandlers.set('listStreamers', onPlayerMessageListStreamers);
+	sfuMessageHandlers.set('subscribe', onPlayerMessageSubscribe);
+	sfuMessageHandlers.set('unsubscribe', onPlayerMessageUnsubscribe);
+	sfuMessageHandlers.set('offer', forwardSFUMessageToPlayer);
+	sfuMessageHandlers.set('answer', forwardSFUMessageToStreamer);
+	sfuMessageHandlers.set('streamerDataChannels', forwardSFUMessageToStreamer);
+	sfuMessageHandlers.set('peerDataChannels', onPeerDataChannelsSFUMessage);
+	sfuMessageHandlers.set('endpointId', onSFUMessageId);
+	sfuMessageHandlers.set('startStreaming', onSFUMessageStartStreaming);
+	sfuMessageHandlers.set('stopStreaming', onSFUMessageStopStreaming);
 
-sfuMessageHandlers.set('listStreamers', onPlayerMessageListStreamers);
-sfuMessageHandlers.set('subscribe', onPlayerMessageSubscribe);
-sfuMessageHandlers.set('unsubscribe', onPlayerMessageUnsubscribe);
-sfuMessageHandlers.set('offer', forwardSFUMessageToPlayer);
-sfuMessageHandlers.set('answer', forwardSFUMessageToStreamer);
-sfuMessageHandlers.set('streamerDataChannels', forwardSFUMessageToStreamer);
-sfuMessageHandlers.set('peerDataChannels', onPeerDataChannelsSFUMessage);
-sfuMessageHandlers.set('endpointId', onSFUMessageId);
-sfuMessageHandlers.set('startStreaming', onSFUMessageStartStreaming);
-sfuMessageHandlers.set('stopStreaming', onSFUMessageStopStreaming);
 
-console.logColor(logging.Green, `WebSocket listening for SFU connections on :${sfuPort}`);
-let sfuServer = new WebSocket.Server({ port: sfuPort });
-sfuServer.on('connection', function (ws, req) {
+	console.logColor(logging.Green, `WebSocket listening for SFU connections on :${sfuPort}`);
+	let sfuServer = new WebSocket.Server({ port: sfuPort });
+	sfuServer.on('connection', function (ws, req) {
 
-	let playerId = sanitizePlayerId(nextPlayerId++);
-	console.logColor(logging.Green, `SFU (${req.connection.remoteAddress}) connected `);
+		let playerId = sanitizePlayerId(nextPlayerId++);
+		console.logColor(logging.Green, `SFU (${req.connection.remoteAddress}) connected `);
 
-	let streamerComponent = new Streamer(req.connection.remoteAddress, ws, StreamerType.SFU);
-	let playerComponent = new Player(playerId, ws, PlayerType.SFU, WhoSendsOffer.Streamer);
+		let streamerComponent = new Streamer(req.connection.remoteAddress, ws, StreamerType.SFU);
+		let playerComponent = new Player(playerId, ws, PlayerType.SFU, WhoSendsOffer.Streamer);
 
-	streamerComponent.setSFUPlayerComponent(playerComponent);
-	playerComponent.setSFUStreamerComponent(streamerComponent);
+		streamerComponent.setSFUPlayerComponent(playerComponent);
+		playerComponent.setSFUStreamerComponent(streamerComponent);
 
-	players.set(playerId, playerComponent);
+		players.set(playerId, playerComponent);
 
-	ws.on('message', (msgRaw) => {
-		var msg;
-		try {
-			msg = JSON.parse(msgRaw);
-		} catch (err) {
-			console.error(`Cannot parse SFU message: ${msgRaw}\nError: ${err}`);
-			ws.close(1008, 'Cannot parse');
-			return;
-		}
-
-		let sfuPlayer = players.get(playerId);
-		if (!sfuPlayer) {
-			console.error(`Received a message from an SFU not in the player list ${playerId}`);
-			ws.close(1001, 'Broken');
-			return;
-		}
-
-		let handler = sfuMessageHandlers.get(msg.type);
-		if (!handler || (typeof handler != 'function')) {
-			if (config.LogVerbose) {
-				console.logColor(logging.White, "\x1b[37m-> %s\x1b[34m: %s", sfuPlayer.id, msgRaw);
+		ws.on('message', (msgRaw) => {
+			var msg;
+			try {
+				msg = JSON.parse(msgRaw);
+			} catch (err) {
+				console.error(`Cannot parse SFU message: ${msgRaw}\nError: ${err}`);
+				ws.close(1008, 'Cannot parse');
+				return;
 			}
-			console.error(`unsupported SFU message type: ${msg.type}`);
-			ws.close(1008, 'Unsupported message type');
-			return;
-		}
-		handler(sfuPlayer, msg);
-	});
 
-	ws.on('close', function(code, reason) {
-		console.error(`SFU disconnected: ${code} - ${reason}`);
-		onSFUDisconnected(playerComponent);
-	});
+			let sfuPlayer = players.get(playerId);
+			if (!sfuPlayer) {
+				console.error(`Received a message from an SFU not in the player list ${playerId}`);
+				ws.close(1001, 'Broken');
+				return;
+			}
 
-	ws.on('error', function(error) {
-		console.error(`SFU connection error: ${error}`);
-		onSFUDisconnected(playerComponent);
-		try {
-			ws.close(1006 /* abnormal closure */, `SFU connection error: ${error}`);
-		} catch(err) {
-			console.error(`ERROR: ws.on error: ${err.message}`);
-		}
-	});
+			let handler = sfuMessageHandlers.get(msg.type);
+			if (!handler || (typeof handler != 'function')) {
+				if (config.LogVerbose) {
+					console.logColor(logging.White, "\x1b[37m-> %s\x1b[34m: %s", sfuPlayer.id, msgRaw);
+				}
+				console.error(`unsupported SFU message type: ${msg.type}`);
+				ws.close(1008, 'Unsupported message type');
+				return;
+			}
+			handler(sfuPlayer, msg);
+		});
 
-	requestStreamerId(playerComponent.getSFUStreamerComponent());
-});
+		ws.on('close', function (code, reason) {
+			console.error(`SFU disconnected: ${code} - ${reason}`);
+			onSFUDisconnected(playerComponent);
+		});
+
+		ws.on('error', function (error) {
+			console.error(`SFU connection error: ${error}`);
+			onSFUDisconnected(playerComponent);
+			try {
+				ws.close(1006 /* abnormal closure */, `SFU connection error: ${error}`);
+			} catch (err) {
+				console.error(`ERROR: ws.on error: ${err.message}`);
+			}
+		});
+
+		requestStreamerId(playerComponent.getSFUStreamerComponent());
+	});
+}
 
 let playerCount = 0;
 
