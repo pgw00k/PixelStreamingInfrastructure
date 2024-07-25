@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>九洲博物馆 - 等待队列</title>
+		<link rel="shortcut icon" href="/images/favicon.ico" type="image/x-icon">
+		<link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
+		<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+		<link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Montserrat:wght@600&display=swap" rel="stylesheet">
+		<link type="text/css" rel="stylesheet" href="queue/styles.css">
+
+		<script src="http://cdn.staticfile.net/jquery/3.7.1/jquery.min.js"></script>
+
+	</head>
+	<body>
+		<main>
+			<section>
+				<img id="logo" src="images/jz-logo.png" alt="JZ">
+				<h1>九洲博物馆</h1>
+				<h1 id="stat_show">检测空闲机器中...</h1>
+				<p>请耐心等待 <span id="countdown">10</span> </p>
+				<button id="btn_reqnew" onclick="postData()">启动新机器！</button>
+			</section>
+		</main>
+		
+		<script type="text/javascript">
+			var isCreating = false;
+			var countdown = document.getElementById("countdown").textContent;
+			setInterval(function() {
+				if(isCreating) return;
+				countdown--;
+				if (countdown == 0) {
+					window.location.reload(1);
+				} else {
+					document.getElementById("countdown").textContent = countdown;
+				}
+			}, 1000);
+
+			function postData() {
+				document.getElementById('btn_reqnew').disabled = true;
+				document.getElementById('stat_show').innerHTML = "正在启动新机器，如遇长时间不响应请尝试刷新本页面";
+				isCreating = true;
+				var xhr = new XMLHttpRequest();
+				var data = JSON.stringify({
+					"user": "test"
+				});
+				xhr.open("POST", "/jz_api/create_ps_server", true);
+				xhr.send(data);
+			}
+		</script>
+	</body>
+</html>
