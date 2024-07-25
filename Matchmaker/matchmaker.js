@@ -17,6 +17,7 @@ const defaultConfig = {
 
 // Similar to the Signaling Server (SS) code, load in a config.json file for the MM parameters
 const argv = require('yargs').argv;
+const clientm = require('clientmanager').Manager;
 
 var configFile = (typeof argv.configFile != 'undefined') ? argv.configFile.toString() : 'config.json';
 console.log(`configFile ${configFile}`);
@@ -92,9 +93,9 @@ let htmlDirectory = 'html/sample'
 if(config.EnableWebserver) {
 	// Setup folders
 
-	if (fs.existsSync('html/custom')) {
-		app.use(express.static(path.join(__dirname, '/html/custom')))
-		htmlDirectory = 'html/custom'
+	if (fs.existsSync('html/jz')) {
+		app.use(express.static(path.join(__dirname, '/html/jz')))
+		htmlDirectory = 'html/jz'
 	} else {
 		app.use(express.static(path.join(__dirname, '/html/sample')))
 	}
@@ -169,6 +170,11 @@ if(enableRedirectionLinks) {
 		} else {
 			sendRetryResponse(res);
 		}
+	});
+
+	// 启动一个流送服务器
+	app.post('/jz_api/create_ps_server', (req, res) => {
+		clientm.RequestNewServer();
 	});
 }
 
@@ -269,6 +275,7 @@ const matchmaker = net.createServer((connection) => {
 				if(cirrusServer.numConnectedClients === 0) {
 					// this make this server immediately available for a new client
 					cirrusServer.lastRedirect = 0;
+					clientm.DisposeServer(cirrusServer.port);
 				}
 			} else {				
 				disconnect(connection);
