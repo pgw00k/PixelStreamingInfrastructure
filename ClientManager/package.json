@@ -1,0 +1,11 @@
+{
+  "name": "clientmanager",
+  "version": "1.0.0",
+  "description": "Manager pixel streaming client one by one to SignallingServer.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "Wings",
+  "license": "ISC"
+}
